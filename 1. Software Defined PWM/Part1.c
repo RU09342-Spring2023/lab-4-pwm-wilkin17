@@ -55,10 +55,13 @@ void ButtonSetup(){
 void TimerB0Setup(){
     TB0CTL = TBSSEL_2 | MC_1 | TBCLR | TBIE;      // SMCLK, up mode, clear TBR, enable interrupt
     TB0CCTL1 |= CCIE;                             // Enable TB0 CCR1 Interrupt
-    TB0CCTL2 |= CCIE;                             // Enable TB0 CCR2 Interrupt
-    TB0CCR1 = 1000;                       // Set CCR1 to set the Red LEDs duty cycle
-    TB0CCR2 = 1000;                       // Set CCR2 to set the Green LEDs duty cycle
     TB0CCR0 = 1000;
+    TB0CCR1 = 500;                                // Set CCR1 to set the Red LEDs duty cycle
+
+    TB1CTL = TBSSEL_2 | MC_1 | TBCLR | TBIE;
+    TB1CCTL1 |= CCIE;
+    TB1CCR0 = 1000;
+    TB1CCR1 = 500;                                // Set CCR1 to set the Green LEDs duty cycle
 }
 
 /*
@@ -70,6 +73,12 @@ void TimerB0Setup(){
 __interrupt void Port_2(void)
 {
     P2IFG &= ~BIT3;                         // Clear P2.3 IFG
+    if (TB0CCR1 >= 1000){                   // Overflow reset
+        TB0CCR1 = 0;
+    }
+    else{
+        TB0CCR1 += 100;                     // Increment duty cycle
+    }
 }
 
 // Port 4 interrupt service routine - For GREEN LED
@@ -77,31 +86,50 @@ __interrupt void Port_2(void)
 __interrupt void Port_4(void)
 {
     P4IFG &= ~BIT1;                         // Clear P4.1 IFG
+    if (TB1CCR1 >= 1000){                   // Overflow reset
+        TB1CCR1 = 0;
+    }
+    else{
+        TB1CCR1 += 100;                     // Increment duty cycle
+    }
 }
 
 // Timer0 B1 Interrupt
-#if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
 #pragma vector=TIMER0_B1_VECTOR
 __interrupt void TIMER0_B1_ISR(void)
-#elif defined(__GNUC__)
-void __attribute__ ((interrupt(TIMER0_B1_VECTOR))) TIMER0_B1_ISR (void)
-#else
-#error Compiler not supported!
-#endif
 {
     switch(__even_in_range(TB0IV,TB0IV_TBIFG))
     {
         case TB0IV_NONE:
             break;                               // No interrupt
         case TB0IV_TBCCR1:
-            P1OUT |= BIT0;
-            break;                               // CCR1 Set the pin to a 1 (for Red LED)
+            P1OUT &= ~BIT0;
+            break;                               // CCR1 Set the pin to a 0 (for Red LED)
         case TB0IV_TBCCR2:
-            P6OUT |= BIT6;
-            break;                               // CCR2 Set the pin to a 1 (for Green LED)
+            break;
         case TB0IV_TBIFG:
+            P1OUT |= BIT0;                       // overflow Set the pin to a 1
+            break;
+        default:
+            break;
+    }
+}
+
+// Timer1 B1 Interrupt
+#pragma vector=TIMER1_B1_VECTOR
+__interrupt void TIMER1_B1_ISR(void)
+{
+    switch(__even_in_range(TB1IV,TB1IV_TBIFG))
+    {
+        case TB1IV_NONE:
+            break;                               // No interrupt
+        case TB1IV_TBCCR1:
             P6OUT &= ~BIT6;
-            P1OUT &= ~BIT0;                       // overflow Set the pin to a 0
+            break;                               // CCR1 Set the pin to a 0 (for Red LED)
+        case TB1IV_TBCCR2:
+            break;
+        case TB1IV_TBIFG:
+            P6OUT |= BIT6;                       // overflow Set the pin to a 1
             break;
         default:
             break;
